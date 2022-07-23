@@ -1,6 +1,6 @@
 # WDatePicker
 
-A datepicker supporting both single and range selection modes.
+A datepicker supporting both single and range selection modes written in SwiftUI.
 
 ![Screenshot](Resources/screenshot.png)
 
