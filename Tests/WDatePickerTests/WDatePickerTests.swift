@@ -1,5 +1,5 @@
-import XCTest
 @testable import WDatePicker
+import XCTest
 
 final class WDatePickerTests: XCTestCase {
     func testExample() throws {

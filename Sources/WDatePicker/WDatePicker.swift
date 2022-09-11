@@ -24,17 +24,29 @@ public struct WDatePicker: View {
     /// - Parameter dateValue: pass a Binding object to get two-way connection
     /// - Parameter rangeModeLabel: pass your localized text for the label of range mode toggle
     public init(dateValue: Binding<WDateValue?>, rangeModeLabel: String = "Range Mode") {
-        self._dateValue = dateValue
+        _dateValue = dateValue
         self.rangeModeLabel = rangeModeLabel
-        self._days = .init(initialValue: Self.getCalendarDays(of: Date()))
+        _days = .init(initialValue: Self.getCalendarDays(of: Date()))
         updateStates(with: dateValue.wrappedValue)
     }
 
     public var body: some View {
         VStack {
             ZStack {
-                Text(getMonthString(of: currentMonth))
-                    .font(.headline)
+                HStack {
+                    Text(getMonthString(of: currentMonth))
+                        .font(.headline)
+                    if !Calendar.current.isDate(currentMonth, equalTo: Date(), toGranularity: .month) {
+                        Button {
+                            currentMonth = Date()
+                        } label: {
+                            Image(systemName: "circle.fill")
+                                .font(.caption2)
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
                 HStack {
                     Button {
                         if let date = Calendar.current.date(byAdding: .month, value: -1, to: currentMonth) {
@@ -108,25 +120,23 @@ public struct WDatePicker: View {
             }
             HStack {
                 Button {
-                    if !Calendar.current.isDate(currentMonth, equalTo: Date(), toGranularity: .month) {
-                        currentMonth = Date()
-                    }
+                    dateValue = nil
                 } label: {
-                    Text("Today")
+                    Text("Clear")
                         .font(.footnote)
                         .foregroundColor(.accentColor)
                 }
                 .buttonStyle(.borderless)
-                .padding([.horizontal])
                 Spacer()
                 Toggle(rangeModeLabel, isOn: $isRangeMode)
                     .toggleStyle(.switch)
                     .font(.footnote)
             }
+            .padding([.horizontal])
         }
         .padding()
-        .background(.white)
-        .padding([.top], -40)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .padding([.top], -40) // fix arrow color
         .onAppear {
             updateStates(with: dateValue)
             days = Self.getCalendarDays(of: currentMonth)
@@ -137,7 +147,7 @@ public struct WDatePicker: View {
         .onChange(of: currentMonth) { _ in
             days = Self.getCalendarDays(of: currentMonth)
         }
-        .onChange(of: isRangeMode) { isRangeMode in
+        .onChange(of: isRangeMode) { _ in
             tmpSelection = nil
             dateValue = nil
         }
