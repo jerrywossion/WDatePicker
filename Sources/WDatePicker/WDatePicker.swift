@@ -7,104 +7,70 @@
 
 import SwiftUI
 
-/// Currently selected value of a WDatePicker.
-public enum WDateValue: Equatable {
-    /// Value for single selection mode.
-    case single(Date)
-    /// Value for range selection mode, with a start Date and an end Date.
-    case range(Date, Date)
-
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        switch (lhs, rhs) {
-        case let (.single(l), .single(r)):
-            return l == r
-        case let (.range(ll, lr), .range(rl, rr)):
-            return ll == rl && lr == rr
-        default:
-            return false
-        }
-    }
-
-    /// Information of current value, "date" for single mode "start - end" for range mode.
-    public var description: String {
-        let formatter = DateFormatter()
-        formatter.setLocalizedDateFormatFromTemplate("MMMM dd")
-        switch self {
-        case let .single(date):
-            return formatter.string(from: date)
-        case let .range(date, date2):
-            return "\(formatter.string(from: date)) - \(formatter.string(from: date2))"
-        }
-    }
-}
-
 /// A datepicker supporting both single and range selection modes.
 public struct WDatePicker: View {
     /// Currently selected value.
-    @Binding public var dateValue: WDateValue
+    @Binding public var dateValue: WDateValue?
     @State private var currentMonth = Date()
     @State private var isRangeMode = false
     @State private var tmpSelection: Date?
-    @State private var days: [Date] = []
+    @State private var days: [Date]
 
-    private let daysInAWeek = 7
-    private let weeksInAMonth = 5
+    static let daysInAWeek = 7
+    static let weeksInAMonth = 5
     private let rangeModeLabel: String
 
     /// Create a WDatePicker
     /// - Parameter dateValue: pass a Binding object to get two-way connection
     /// - Parameter rangeModeLabel: pass your localized text for the label of range mode toggle
-    public init(dateValue: Binding<WDateValue>, rangeModeLabel: String = "Range Mode") {
+    public init(dateValue: Binding<WDateValue?>, rangeModeLabel: String = "Range Mode") {
         self._dateValue = dateValue
         self.rangeModeLabel = rangeModeLabel
+        self._days = .init(initialValue: Self.getCalendarDays(of: Date()))
+        updateStates(with: dateValue.wrappedValue)
     }
 
     public var body: some View {
         VStack {
-            HStack {
+            ZStack {
                 Text(getMonthString(of: currentMonth))
-                    .font(.title)
-                Spacer()
+                    .font(.headline)
                 HStack {
-                    Group {
-                        Button {
-                            if let date = Calendar.current.date(byAdding: .month, value: -1, to: currentMonth) {
-                                currentMonth = date
-                            }
-                        } label: {
-                            Image(systemName: "arrowtriangle.left.fill")
+                    Button {
+                        if let date = Calendar.current.date(byAdding: .month, value: -1, to: currentMonth) {
+                            currentMonth = date
                         }
-                        Button {
-                            if !Calendar.current.isDate(currentMonth, equalTo: Date(), toGranularity: .month) {
-                                currentMonth = Date()
-                            }
-                        } label: {
-                            Image(systemName: "circle.fill")
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .buttonStyle(.borderless)
+                    Spacer()
+                    Button {
+                        if let date = Calendar.current.date(byAdding: .month, value: 1, to: currentMonth) {
+                            currentMonth = date
                         }
-                        Button {
-                            if let date = Calendar.current.date(byAdding: .month, value: 1, to: currentMonth) {
-                                currentMonth = date
-                            }
-                        } label: {
-                            Image(systemName: "arrowtriangle.right.fill")
-                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
                     }
                     .buttonStyle(.borderless)
                 }
             }
-            Grid {
+            .padding([.top], 40)
+            .padding([.bottom], 14)
+            Grid(horizontalSpacing: 0, verticalSpacing: 2) {
                 GridRow {
                     ForEach(Calendar.current.shortWeekdaySymbols, id: \.self) { weekday in
                         Text(weekday)
+                            .font(.headline)
                     }
                 }
-                Divider()
-                if days.count == weeksInAMonth * daysInAWeek {
-                    ForEach(0 ..< weeksInAMonth, id: \.self) { w in
+                .padding([.bottom], 4)
+                if days.count == Self.weeksInAMonth * Self.daysInAWeek {
+                    ForEach(0 ..< Self.weeksInAMonth, id: \.self) { w in
                         GridRow {
-                            ForEach(0 ..< daysInAWeek, id: \.self) { d in
+                            ForEach(0 ..< Self.daysInAWeek, id: \.self) { d in
                                 Button {
-                                    let currentDate = days[w * daysInAWeek + d]
+                                    let currentDate = days[w * Self.daysInAWeek + d]
                                     if isRangeMode {
                                         if let tmpSelection {
                                             let newValue: WDateValue
@@ -125,13 +91,14 @@ public struct WDatePicker: View {
                                         dateValue = .single(currentDate)
                                     }
                                 } label: {
-                                    Text(getDayString(of: days[w * daysInAWeek + d]))
-                                        .foregroundColor(getDayColor(of: days[w * daysInAWeek + d]))
-                                        .frame(minWidth: 30, minHeight: 30)
+                                    Text(getDayString(of: days[w * Self.daysInAWeek + d]))
+                                        .font(.body)
+                                        .foregroundColor(getDayColor(of: days[w * Self.daysInAWeek + d]))
+                                        .frame(width: 30, height: 30)
                                         .background {
-                                            Circle()
-                                                .fill(shouldHighlight(for: days[w * daysInAWeek + d]) ? Color(nsColor: .selectedControlColor) : .clear)
+                                            shouldHighlight(for: days[w * Self.daysInAWeek + d]) ? Color(nsColor: .selectedControlColor).opacity(0.5) : Color.clear
                                         }
+                                        .cornerRadius(isRangeMode ? 0 : 15)
                                 }
                                 .buttonStyle(.borderless)
                             }
@@ -139,34 +106,40 @@ public struct WDatePicker: View {
                     }
                 }
             }
-            Divider()
             HStack {
+                Button {
+                    if !Calendar.current.isDate(currentMonth, equalTo: Date(), toGranularity: .month) {
+                        currentMonth = Date()
+                    }
+                } label: {
+                    Text("Today")
+                        .font(.footnote)
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.borderless)
+                .padding([.horizontal])
                 Spacer()
                 Toggle(rangeModeLabel, isOn: $isRangeMode)
                     .toggleStyle(.switch)
+                    .font(.footnote)
             }
         }
         .padding()
+        .background(.white)
+        .padding([.top], -40)
         .onAppear {
             updateStates(with: dateValue)
-            days = getCalendarDays(of: currentMonth)
+            days = Self.getCalendarDays(of: currentMonth)
         }
         .onChange(of: dateValue) { value in
             updateStates(with: value)
         }
         .onChange(of: currentMonth) { _ in
-            days = getCalendarDays(of: currentMonth)
+            days = Self.getCalendarDays(of: currentMonth)
         }
         .onChange(of: isRangeMode) { isRangeMode in
-            if isRangeMode {
-                if case let .single(date) = dateValue {
-                    tmpSelection = date
-                }
-            } else {
-                if case .range = dateValue {
-                    tmpSelection = nil
-                }
-            }
+            tmpSelection = nil
+            dateValue = nil
         }
     }
 
@@ -180,6 +153,12 @@ public struct WDatePicker: View {
                 return calendar.isDate(day, inSameDayAs: tmpSelection)
             } else {
                 return start ... end ~= day
+            }
+        case nil:
+            if let tmpSelection {
+                return calendar.isDate(day, inSameDayAs: tmpSelection)
+            } else {
+                return false
             }
         }
     }
@@ -208,7 +187,11 @@ public struct WDatePicker: View {
         }
     }
 
-    private func updateStates(with dateValue: WDateValue) {
+    private func updateStates(with dateValue: WDateValue?) {
+        guard let dateValue else {
+            currentMonth = Date()
+            return
+        }
         switch dateValue {
         case let .single(date):
             if !Calendar.current.isDate(date, equalTo: currentMonth, toGranularity: .month) {
@@ -229,7 +212,7 @@ public struct WDatePicker: View {
         }
     }
 
-    private func getCalendarDays(of month: Date) -> [Date] {
+    private static func getCalendarDays(of month: Date) -> [Date] {
         var dates: [Date] = []
         let calendar = Calendar.current
         let dateDc = calendar.dateComponents([.month, .year, .day], from: month)
