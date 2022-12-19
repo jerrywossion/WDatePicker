@@ -13,25 +13,84 @@ public struct WDatePicker: View {
     @Binding public var dateValue: WDateValue?
     @State private var currentMonth = Date()
     @State private var isRangeMode = false
-    @State private var tmpSelection: Date?
+    @State private var includesTime = false
+    @State private var tmpDateSelection: Date?
+    @State private var tmpStartTimeSelection: Date = .init()
+    @State private var tmpEndTimeSelection: Date = .init()
     @State private var days: [Date]
 
     static let daysInAWeek = 7
     static let weeksInAMonth = 5
     private let rangeModeLabel: String
+    private let includesTimeLabel: String
+
+    private var startDateString: String {
+        if let dateValue {
+            let formatter = DateFormatter()
+            formatter.setLocalizedDateFormatFromTemplate("dd MMMM yyyy")
+            switch dateValue {
+            case let .single(date):
+                return formatter.string(from: date)
+            case let .range(start, _):
+                return formatter.string(from: start)
+            }
+        } else {
+            return "Choose date"
+        }
+    }
+
+    private var endDateString: String {
+        if let dateValue {
+            let formatter = DateFormatter()
+            formatter.setLocalizedDateFormatFromTemplate("dd MMMM yyyy")
+            switch dateValue {
+            case let .single(date):
+                return formatter.string(from: date)
+            case let .range(_, end):
+                return formatter.string(from: end)
+            }
+        } else {
+            return "Choose date"
+        }
+    }
 
     /// Create a WDatePicker
     /// - Parameter dateValue: pass a Binding object to get two-way connection
     /// - Parameter rangeModeLabel: pass your localized text for the label of range mode toggle
-    public init(dateValue: Binding<WDateValue?>, rangeModeLabel: String = "Range Mode") {
+    public init(dateValue: Binding<WDateValue?>, rangeModeLabel: String = "Range Mode", includesTimeLabel: String = "Include Time") {
         _dateValue = dateValue
         self.rangeModeLabel = rangeModeLabel
+        self.includesTimeLabel = includesTimeLabel
         _days = .init(initialValue: Self.getCalendarDays(of: Date()))
         updateStates(with: dateValue.wrappedValue)
     }
 
     public var body: some View {
-        VStack {
+        VStack(spacing: 0) {
+            // MARK: - Title and upper options
+
+            HStack {
+                Button {
+                    dateValue = nil
+                } label: {
+                    Text("Clear")
+                        .font(.footnote)
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.borderless)
+
+                Spacer()
+
+                Toggle(rangeModeLabel, isOn: $isRangeMode)
+                    .toggleStyle(TinyToggleStyle())
+                    .font(.footnote)
+            }
+            .padding([.top], 40)
+            .padding([.bottom], 10)
+
+            Divider()
+                .padding([.bottom], 10)
+
             ZStack {
                 HStack {
                     Text(getMonthString(of: currentMonth))
@@ -67,8 +126,10 @@ public struct WDatePicker: View {
                     .buttonStyle(.borderless)
                 }
             }
-            .padding([.top], 40)
             .padding([.bottom], 14)
+
+            // MARK: - Date grids
+
             Grid(horizontalSpacing: 0, verticalSpacing: 2) {
                 GridRow {
                     ForEach(Calendar.current.shortWeekdaySymbols, id: \.self) { weekday in
@@ -84,12 +145,12 @@ public struct WDatePicker: View {
                                 Button {
                                     let currentDate = days[w * Self.daysInAWeek + d]
                                     if isRangeMode {
-                                        if let tmpSelection {
+                                        if let tmpDateSelection {
                                             let newValue: WDateValue
-                                            if tmpSelection < currentDate {
-                                                newValue = .range(tmpSelection, currentDate)
+                                            if tmpDateSelection < currentDate {
+                                                newValue = .range(tmpDateSelection, currentDate)
                                             } else {
-                                                newValue = .range(currentDate, tmpSelection)
+                                                newValue = .range(currentDate, tmpDateSelection)
                                             }
                                             if dateValue != newValue {
                                                 dateValue = newValue
@@ -97,7 +158,7 @@ public struct WDatePicker: View {
                                                 updateStates(with: dateValue)
                                             }
                                         } else {
-                                            tmpSelection = currentDate
+                                            tmpDateSelection = currentDate
                                         }
                                     } else {
                                         dateValue = .single(currentDate)
@@ -118,21 +179,41 @@ public struct WDatePicker: View {
                     }
                 }
             }
+            .padding(.bottom, 4)
+
+            Divider()
+                .padding([.bottom], 10)
+
+            // MARK: - Bottom options
+
             HStack {
-                Button {
-                    dateValue = nil
-                } label: {
-                    Text("Clear")
-                        .font(.footnote)
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.borderless)
-                Spacer()
-                Toggle(rangeModeLabel, isOn: $isRangeMode)
-                    .toggleStyle(.switch)
+                Toggle(includesTimeLabel, isOn: $includesTime)
+                    .toggleStyle(.checkbox)
                     .font(.footnote)
+                Spacer()
             }
-            .padding([.horizontal])
+            .padding(.bottom, 5)
+
+            if includesTime {
+                HStack {
+                    Text(startDateString)
+                    DatePicker("", selection: $tmpStartTimeSelection, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                        .scaledToFit()
+                        .disabled(dateValue == nil)
+                    Spacer()
+                }
+                if isRangeMode {
+                    HStack {
+                        Text(endDateString)
+                        DatePicker("", selection: $tmpEndTimeSelection, displayedComponents: .hourAndMinute)
+                            .scaledToFit()
+                            .labelsHidden()
+                            .disabled(dateValue == nil)
+                        Spacer()
+                    }
+                }
+            }
         }
         .padding()
         .background(Color(nsColor: .controlBackgroundColor))
@@ -148,9 +229,42 @@ public struct WDatePicker: View {
             days = Self.getCalendarDays(of: currentMonth)
         }
         .onChange(of: isRangeMode) { _ in
-            tmpSelection = nil
+            tmpDateSelection = nil
             dateValue = nil
         }
+        .onChange(of: tmpStartTimeSelection) {
+            guard let dateValue else {
+                return
+            }
+            switch dateValue {
+            case let .single(date):
+                self.dateValue = .single(combine(date: date, time: $0))
+            case let .range(start, end):
+                self.dateValue = .range(combine(date: start, time: $0), end)
+            }
+        }
+        .onChange(of: tmpEndTimeSelection) {
+            guard isRangeMode,
+                  case let .range(start, end) = dateValue
+            else {
+                return
+            }
+            dateValue = .range(start, combine(date: end, time: $0))
+        }
+    }
+
+    private func combine(date: Date, time: Date) -> Date {
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: time)
+        var components = DateComponents()
+        components.year = dateComponents.year
+        components.month = dateComponents.month
+        components.day = dateComponents.day
+        components.hour = timeComponents.hour
+        components.minute = timeComponents.minute
+        components.second = timeComponents.second
+        return calendar.date(from: components) ?? date
     }
 
     private func shouldHighlight(for day: Date) -> Bool {
@@ -159,14 +273,14 @@ public struct WDatePicker: View {
         case let .single(date):
             return calendar.isDate(day, inSameDayAs: date)
         case let .range(start, end):
-            if let tmpSelection {
-                return calendar.isDate(day, inSameDayAs: tmpSelection)
+            if let tmpDateSelection {
+                return calendar.isDate(day, inSameDayAs: tmpDateSelection)
             } else {
                 return start ... end ~= day
             }
         case nil:
-            if let tmpSelection {
-                return calendar.isDate(day, inSameDayAs: tmpSelection)
+            if let tmpDateSelection {
+                return calendar.isDate(day, inSameDayAs: tmpDateSelection)
             } else {
                 return false
             }
@@ -210,7 +324,7 @@ public struct WDatePicker: View {
             if isRangeMode {
                 isRangeMode = false
             }
-            tmpSelection = nil
+            tmpDateSelection = nil
         case let .range(_, end):
             if !Calendar.current.isDate(end, equalTo: currentMonth, toGranularity: .month) {
                 currentMonth = end
@@ -218,7 +332,7 @@ public struct WDatePicker: View {
             if !isRangeMode {
                 isRangeMode = true
             }
-            tmpSelection = nil
+            tmpDateSelection = nil
         }
     }
 
@@ -250,5 +364,30 @@ public struct WDatePicker: View {
 struct WDatePicker_Previews: PreviewProvider {
     static var previews: some View {
         WDatePicker(dateValue: .constant(.single(Date())))
+    }
+}
+
+// MARK: - TinyToggleStyle
+
+struct TinyToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            configuration.label
+
+            ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                RoundedRectangle(cornerRadius: 5)
+                    .frame(width: 20, height: 10)
+                    .foregroundColor(configuration.isOn ? Color(nsColor: .controlAccentColor) : .gray)
+                Circle()
+                    .frame(width: 8, height: 8)
+                    .foregroundColor(.white)
+                    .padding(.all, 1)
+                    .shadow(radius: 1)
+            }
+            .onTapGesture {
+                configuration.$isOn.wrappedValue.toggle()
+            }
+            .animation(.easeInOut(duration: 0.1), value: configuration.isOn)
+        }
     }
 }
