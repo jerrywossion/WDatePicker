@@ -11,9 +11,9 @@ import SwiftUI
 public struct WDatePicker: View {
     /// Currently selected value.
     @Binding public var dateValue: WDateValue?
+    @Binding public var includesTime: Bool
     @State private var currentMonth = Date()
     @State private var isRangeMode = false
-    @State private var includesTime = false
     @State private var tmpDateSelection: Date?
     @State private var tmpStartTimeSelection: Date = .init()
     @State private var tmpEndTimeSelection: Date = .init()
@@ -57,8 +57,9 @@ public struct WDatePicker: View {
     /// Create a WDatePicker
     /// - Parameter dateValue: pass a Binding object to get two-way connection
     /// - Parameter rangeModeLabel: pass your localized text for the label of range mode toggle
-    public init(dateValue: Binding<WDateValue?>, rangeModeLabel: String = "Range Mode", includesTimeLabel: String = "Include Time") {
+    public init(dateValue: Binding<WDateValue?>, includesTime: Binding<Bool>, rangeModeLabel: String = "Range Mode", includesTimeLabel: String = "Include Time") {
         _dateValue = dateValue
+        _includesTime = includesTime
         self.rangeModeLabel = rangeModeLabel
         self.includesTimeLabel = includesTimeLabel
         _days = .init(initialValue: Self.getCalendarDays(of: Date()))
@@ -325,7 +326,8 @@ public struct WDatePicker: View {
                 isRangeMode = false
             }
             tmpDateSelection = nil
-        case let .range(_, end):
+            tmpStartTimeSelection = date
+        case let .range(start, end):
             if !Calendar.current.isDate(end, equalTo: currentMonth, toGranularity: .month) {
                 currentMonth = end
             }
@@ -333,6 +335,8 @@ public struct WDatePicker: View {
                 isRangeMode = true
             }
             tmpDateSelection = nil
+            tmpStartTimeSelection = start
+            tmpEndTimeSelection = end
         }
     }
 
@@ -363,7 +367,7 @@ public struct WDatePicker: View {
 
 struct WDatePicker_Previews: PreviewProvider {
     static var previews: some View {
-        WDatePicker(dateValue: .constant(.single(Date())))
+        WDatePicker(dateValue: .constant(.single(Date())), includesTime: .init(get: { true }, set: { _ in }))
     }
 }
 
